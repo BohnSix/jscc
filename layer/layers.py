@@ -571,3 +571,45 @@ class BasicLayerEnc(nn.Module):
             blk.update_mask()
         if self.downsample is not None:
             self.downsample.input_resolution = (H, W)
+
+
+class ViTBlock(nn.Module):
+    """Standard ViT block with global multi-head self-attention + FFN."""
+
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=True,
+                 drop=0., attn_drop=0., drop_path=0., norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.attn = nn.MultiheadAttention(
+            dim, num_heads, dropout=attn_drop, bias=qkv_bias, batch_first=True
+        )
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
+
+    def forward(self, x):
+        h = self.norm1(x)
+        h, _ = self.attn(h, h, h)
+        x = x + self.drop_path(h)
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        return x
+
+
+class CrossAttentionBlock(nn.Module):
+    """Cross-attention block: image tokens attend to conditioning tokens."""
+
+    def __init__(self, dim, num_heads, mlp_ratio=4., norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.norm1 = norm_layer(dim)
+        self.cross_attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim)
+
+    def forward(self, x, cond):
+        h = self.norm1(x)
+        h, _ = self.cross_attn(h, cond, cond)
+        x = x + h
+        x = x + self.mlp(self.norm2(x))
+        return x

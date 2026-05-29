@@ -101,6 +101,21 @@ class AnalysisTransform(nn.Module):
         x = x.reshape(B, self.H, self.W, N).permute(0, 3, 1, 2)
         return x
 
+    def forward_hierarchical(self, x):
+        _, _, H_img, W_img = x.shape
+        x = self.patch_embed(x)
+        features = []
+        for i_layer, layer in enumerate(self.layers):
+            x = layer(x)
+            B, L, N = x.shape
+            h = H_img // (2 ** (i_layer + 1))
+            w = W_img // (2 ** (i_layer + 1))
+            features.append(x.reshape(B, h, w, N).permute(0, 3, 1, 2))
+        x = self.norm(x)
+        B, L, N = x.shape
+        features[-1] = x.reshape(B, self.H, self.W, N).permute(0, 3, 1, 2)
+        return features
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)

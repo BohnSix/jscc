@@ -18,7 +18,9 @@ class Datasets(Dataset):
             self.transform = transforms.Compose(transforms_list)
         else:
             self.data_dir = config.test_data_dir
+            _, self.im_height, self.im_width = config.image_dims
             self.transform = transforms.Compose([
+                transforms.CenterCrop((self.im_height, self.im_width)),
                 transforms.ToTensor()])
         self.imgs = []
         for dir in self.data_dir:
